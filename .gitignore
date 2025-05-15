@@ -1,0 +1,26 @@
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+
+# 忽略日志和模型输出
+*.log
+*.pt
+*.pth
+*.h5
+
+
+# 忽略数据集和输出目录
+/data/
+datasets/
+output/
+logs/
+
+
+# 忽略文件
+data
+games
+games.7z
+gtp.spec
+dist/
+build/
