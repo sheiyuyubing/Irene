@@ -88,7 +88,7 @@ def prepareValueSgfFile(fileName):
 
 
 def preparePolicyData(fileCount):
-    with open('games/allValid1.txt', 'r') as allValidFile:
+    with open('games/allValid2.txt', 'r') as allValidFile:
         allValidLines = allValidFile.readlines()
 
     allInputData = []
@@ -119,7 +119,7 @@ def preparePolicyData(fileCount):
 
 
 def prepareValueData(fileCount):
-    with open('games/allValid1.txt', 'r') as allValidFile:
+    with open('games/allValid2.txt', 'r') as allValidFile:
         allValidLines = allValidFile.readlines()
 
     allValueInputData = []
@@ -146,5 +146,5 @@ def prepareValueData(fileCount):
 
 
 if __name__ == '__main__':
-    preparePolicyData(2000)
+    preparePolicyData(30000)
     prepareValueData(20000)
