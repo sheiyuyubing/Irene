@@ -11,7 +11,7 @@ __pycache__/
 
 
 # 忽略数据集和输出目录
-/data/
+data/
 datasets/
 output/
 logs/
@@ -27,3 +27,4 @@ build/
 games.zip
 allValid2.txt
 policyNet.zip
+Download
