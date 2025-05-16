@@ -3,10 +3,10 @@ import os
 import random
 import torch
 from go import Go
-from PrepareData_2 import preparePolicyData
-from train_2 import trainPolicy
+from prepareData import preparePolicyData
+from train import trainPolicy
 from net import PolicyNetwork
-from genMove_2 import genMovePolicy
+from genMove import genMovePolicy
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
