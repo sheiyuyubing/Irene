@@ -12,6 +12,8 @@ class Go:
         self.previousBoard = np.zeros((size, size), dtype=np.int8)
         self.history = [(None, None)] * 8
         self.current_color = 1  # 1 for black, -1 for white
+        self.passcount = 0
+
 
     def clone(self):
         go = Go(self.size)
@@ -20,6 +22,7 @@ class Go:
         go.previousBoard = np.array(self.previousBoard)
         go.history = list(self.history)
         go.current_color =  self.current_color
+        go.passcount = self.passcount
         return go
 
     def current_player(self):
@@ -67,12 +70,12 @@ class Go:
             return False
 
         self.current_color = -color
-        self.history.append((x, y))
+        self.history.append((x, y)) #将双元组放入history中
 
         return True
 
     def game_over(self):
-        return self.pass_count >= 2
+        return self.passcount >= 2
 
     def clearColorNear(self, color, x, y):
         if self.board[x, y] != color:
@@ -112,6 +115,59 @@ class Go:
         else:
             self.liberty[boardGroup == 1] = liberties
 
+    def get_winner(self):
+        """
+        统计活子和地盘（空点被单一颜色围绕的区域）总数。
+        返回 1 表示黑胜，-1 表示白胜，0 表示平局。
+        """
+        visited = np.zeros((19, 19), dtype=bool)
+        territory = np.zeros((19, 19), dtype=int)
+
+        def dfs(x, y, seen, surround_color):
+            if x < 0 or x >= 19 or y < 0 or y >= 19:
+                return True
+            if seen[x][y] or self.board[x][y] != 0:
+                return True
+            seen[x][y] = True
+
+            adjacent_colors = set()
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < 19 and 0 <= ny < 19:
+                    if self.board[nx][ny] == 0:
+                        dfs(nx, ny, seen, surround_color)
+                    else:
+                        adjacent_colors.add(self.board[nx][ny])
+
+            if len(adjacent_colors) == 1:
+                surround_color[0] = adjacent_colors.pop()
+            else:
+                surround_color[0] = 0  # 混合或无领地
+            return True
+
+        black_score = np.sum(self.board == 1)
+        white_score = np.sum(self.board == -1)
+
+        for x in range(19):
+            for y in range(19):
+                if self.board[x][y] == 0 and not visited[x][y]:
+                    seen = np.zeros((19, 19), dtype=bool)
+                    surround_color = [0]
+                    dfs(x, y, seen, surround_color)
+
+                    if surround_color[0] == 1:
+                        black_score += np.sum(seen)
+                    elif surround_color[0] == -1:
+                        white_score += np.sum(seen)
+
+                    visited |= seen
+
+        if black_score > white_score:
+            return 1
+        elif white_score > black_score:
+            return -1
+        else:
+            return 0  # 平局
 
 def toDigit(x, y):
     return x * 19 + y
