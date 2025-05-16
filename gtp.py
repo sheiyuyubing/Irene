@@ -46,6 +46,7 @@ while True:
         if position == 'pass':
             print('play PASS')
             go.current_color = -color
+            go.passcount = go.passcount+1
         else:
             # position = F12
             y, x = position[0], position[1:]
