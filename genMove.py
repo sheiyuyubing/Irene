@@ -106,7 +106,32 @@ def genMovePolicy(go,at):
             print(strPosition)
             break
 
+# 传入当前开始搜索的节点，返回创建的新的节点
+# 先找当前未选择过的子节点，如果有多个则随机选。如果都选择过就找 UCB 最大的节点
+def treePolicy(root):
+    node = root
+    while True:
+        if len(node.children) == 0:
+            return node
 
+        allExpanded = True
+        for child in node.children:
+            if not child.expanded:
+                allExpanded = False
+                break
+
+        if allExpanded:
+            node = getBestChild(node)
+        else:
+            return child
+
+
+def backward(node, value):
+    while node:
+        node.N += 1
+        node.Q += value
+        node.expanded = True
+        node = node.parent
 
 
 class MCTSNode:
@@ -161,16 +186,14 @@ def getMostVisitedChild(node):
     return bestChild
 
 
-# 随机操作后创建新的节点，返回最终节点的 value
-def defaultPolicy(expandNode, rootColor):
+def defaultPolicy(expandNode, rootColor, at):
     newGo = expandNode.go.clone()
     willPlayColor = expandNode.color
 
     for i in range(5):
-        predict = getPlayoutNetResult(newGo, willPlayColor)
+        predict = getPlayoutNetResult(newGo, at)
 
         while True:
-            # random choose a move
             selectedIndex = np.random.choice(len(predict), p=predict.exp().detach().numpy())
             x, y = toPosition(selectedIndex)
             if (x, y) == (None, None):
@@ -180,7 +203,7 @@ def defaultPolicy(expandNode, rootColor):
 
         willPlayColor = -willPlayColor
 
-    value = getValueNetResult(newGo, rootColor)
+    value = getValueNetResult(newGo, at)
 
     if debug:
         print(f'expandNode: {expandNode} value: {value}')
@@ -188,11 +211,11 @@ def defaultPolicy(expandNode, rootColor):
     return value
 
 
-def searchChildren(node):
+def searchChildren(node, at):
     go = node.go
     nodeWillPlayColor = node.color
 
-    predict = getPolicyNetResult(go)
+    predict = getPolicyNetResult(go, at)
     predictReverseSortIndex = reversed(torch.argsort(predict))
 
     count = 0
@@ -213,59 +236,27 @@ def searchChildren(node):
             count += 1
             if count == 2:
                 break
-    # node.expanded = True
 
 
-# 传入当前开始搜索的节点，返回创建的新的节点
-# 先找当前未选择过的子节点，如果有多个则随机选。如果都选择过就找 UCB 最大的节点
-def treePolicy(root):
-    node = root
-    while True:
-        if len(node.children) == 0:
-            return node
-
-        allExpanded = True
-        for child in node.children:
-            if not child.expanded:
-                allExpanded = False
-                break
-
-        if allExpanded:
-            node = getBestChild(node)
-        else:
-            return child
-
-
-def backward(node, value):
-    while node:
-        node.N += 1
-        node.Q += value
-        node.expanded = True
-        node = node.parent
-
-
-def MCTS(root):
+def MCTS(root, at):
     rootColor = root.color
     for i in range(200):
         expandNode = treePolicy(root)
-        assert expandNode != None
-        searchChildren(expandNode)
-        value = defaultPolicy(expandNode, rootColor)
+        assert expandNode is not None
+        searchChildren(expandNode, at)
+        value = defaultPolicy(expandNode, rootColor, at)
         backward(expandNode, value)
-        # print(expandNode)
-
     bestNextNode = getBestChild(root)
     return bestNextNode
 
 
-def genMoveMCTS(go):
+def genMoveMCTS(go, at):
     root = MCTSNode(go, None)
-
-    bestNextNode = MCTS(root)
+    bestNextNode = MCTS(root, at)
     bestMove = bestNextNode.go.history[-1]
 
     if debug:
-        playoutResult = getPlayoutNetResult(go)
+        playoutResult = getPlayoutNetResult(go, at)
         playoutMove = toPosition(torch.argmax(playoutResult))
         print(playoutMove, bestMove, playoutMove == bestMove)
         for child in root.children:
@@ -275,16 +266,15 @@ def genMoveMCTS(go):
         sys.stderr.write(str(child) + '\n')
 
     x, y = bestMove
-    moveResult = go.move( x, y)
+    moveResult = go.move(x, y)
     strPosition = toStrPosition(x, y)
 
-    if moveResult == False:
+    if not moveResult:
         sys.stderr.write(f'Illegal move: {strPosition}')
         exit(1)
     else:
         print(strPosition)
     return x, y
-
 
 debug = False
 
