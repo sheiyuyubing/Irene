@@ -44,7 +44,8 @@ def recentOnehotFeatures(history, length=3):
     return features
 
 
-def getAllFeatures(go, willPlayColor):
+def getAllFeatures(go):
+    willPlayColor = go.current_color
     board = go.board
     liberty = go.liberty
     history = go.history
