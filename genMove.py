@@ -95,6 +95,7 @@ def genMovePolicy(go,at):
     for predictIndex in predictReverseSortIndex:
         x, y = toPosition(predictIndex)
         if (x, y) == (None, None):
+            go.passcount = go.passcount + 1
             print('pass')
             return
         moveResult = go.move(x, y)
@@ -103,6 +104,7 @@ def genMovePolicy(go,at):
         if moveResult == False:
             sys.stderr.write(f'Illegal move: {strPosition}\n')
         else:
+            go.passcount = 0
             print(strPosition)
             break
 
