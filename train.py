@@ -1,251 +1,140 @@
-from go import *
-from prepareData import *
+# coding=utf-8
+from torch.utils.data import Dataset, DataLoader, random_split
+import torch
+import os
+import glob
 from net import *
-import sys
+
 
 # use cuda if available
 device = torch.device('cpu')
 if torch.cuda.is_available():
     device = torch.device('cuda')
 
+class PolicyBatchDataset(Dataset):
+    def __init__(self, data_dir='data/policy_batches', pattern='policyData_part*.pt'):
+        self.file_paths = sorted(glob.glob(os.path.join(data_dir, pattern)))
+        self.index_map = []
 
-# set random seed
-def setRandomSeed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
+        # 创建索引映射表：每条数据指向其在某个文件的行
+        for file_idx, file_path in enumerate(self.file_paths):
+            input_tensor, _ = torch.load(file_path)
+            for i in range(len(input_tensor)):
+                self.index_map.append((file_idx, i))
 
+    def __len__(self):
+        return len(self.index_map)
 
-setRandomSeed(0)
-
-
-def splitData(inputData, outputData, ratio):
-    length = len(inputData)
-    trainLength = int(length * ratio)
-    trainInputData, testInputData = inputData[:trainLength], inputData[trainLength:]
-    trainOutputData, testOutputData = outputData[:trainLength], outputData[trainLength:]
-
-    trainPermutation = torch.randperm(len(trainInputData))
-    trainInputData = trainInputData[trainPermutation]
-    trainOutputData = trainOutputData[trainPermutation]
-
-    testPermutation = torch.randperm(len(testInputData))
-    testInputData = testInputData[testPermutation]
-    testOutputData = testOutputData[testPermutation]
-
-    del inputData, outputData, trainPermutation, testPermutation
-    return trainInputData, trainOutputData, testInputData, testOutputData
+    def __getitem__(self, idx):
+        file_idx, row_idx = self.index_map[idx]
+        input_tensor, output_tensor = torch.load(self.file_paths[file_idx])
+        return input_tensor[row_idx], output_tensor[row_idx]
 
 
-def trainPolicy(net, outputFileName, epoch=10):
-    # optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+
+def trainPolicy(net, output_dir='checkpoints', epoch=10):
+    from torch.utils.data import DataLoader, random_split
+
+
+    os.makedirs(output_dir, exist_ok=True)
+
     optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.1)
     loss_function = nn.CrossEntropyLoss()
 
-    inputData, outputData = torch.load('policyData.pt')
+    dataset = PolicyBatchDataset(data_dir='data/policy_batches')
+    total_size = len(dataset)
+    train_size = int(0.8 * total_size)
+    test_size = total_size - train_size
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
 
-    trainInputData, trainOutputData, testInputData, testOutputData = splitData(inputData, outputData, 0.8)
+    batch_size = 100
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    # use cuda to train
     net.to(device)
 
-    # batch size = 10
-    batchSize = 100
-    trainBatchCount = int(len(trainInputData) / batchSize)
+    best_acc = 0.0
+    acc_record = []
 
-    logInterval = 1000
+    for ep in range(epoch):
+        net.train()
+        total_loss = 0
+        correct = 0
+        total = 0
 
-    testBatchCount = int(len(testInputData) / batchSize)
-    totalLoss = 0
-    totalCorrectCount = 0
+        for batch_idx, (inputs, targets) in enumerate(train_loader):
+            inputs, targets = inputs.to(device), targets.view(-1).to(device)
 
-    for epoch in range(epoch):
-        totalLoss = 0
-        totalCorrectCount = 0
+            outputs = net(inputs)
+            loss = loss_function(outputs, targets)
 
-        for i in range(trainBatchCount):
-            # get batch data
-            inputDataBatch = trainInputData[i * batchSize:(i + 1) * batchSize]
-            outputDataBatch = trainOutputData[i * batchSize:(i + 1) * batchSize].reshape(-1)
-
-            # use cuda to train
-            inputDataBatch = inputDataBatch.to(device)
-            outputDataBatch = outputDataBatch.to(device)
-
-            # forward
-            output = net(inputDataBatch)
-            correctCount = torch.sum(torch.argmax(output, dim=1) == outputDataBatch).item()
-            totalCorrectCount += correctCount
-
-            # backward
-            loss = loss_function(output, outputDataBatch)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            totalLoss += loss.item()
+            total_loss += loss.item()
+            correct += (outputs.argmax(dim=1) == targets).sum().item()
+            total += targets.size(0)
 
-            if i % logInterval == 0 and i != 0:
-                correctRate = totalCorrectCount / (logInterval * batchSize)
-                avgLoss = totalLoss / logInterval
-                print(f'epoch: {epoch:3}   batch: {i:>5}   correctRate: {correctRate:.2%}   avgLoss: {avgLoss:.2f}')
-                totalCorrectCount = 0
-                totalLoss = 0
-
-        scheduler.step()
-
-        totalCorrectCount = 0
-        totalLoss = 0
-
-        # test
-        with torch.no_grad():
-            for i in range(testBatchCount):
-                testInputDataBatch = testInputData[i * batchSize:(i + 1) * batchSize]
-                testOutputDataBatch = testOutputData[i * batchSize:(i + 1) * batchSize].reshape(-1)
-
-                testInputDataBatch = testInputDataBatch.to(device)
-                testOutputDataBatch = testOutputDataBatch.to(device)
-
-                output = net(testInputDataBatch)
-                correctCount = torch.sum(torch.argmax(output, dim=1) == testOutputDataBatch).item()
-                totalCorrectCount += correctCount
-
-                loss = loss_function(output, testOutputDataBatch)
-                totalLoss += loss.item()
-
-            correctRate = totalCorrectCount / len(testInputData)
-            avgLoss = totalLoss / len(testInputData) * batchSize
-            learningRate = optimizer.param_groups[0]['lr']
-            print(f'epoch: {epoch:3}                  correctRate: {correctRate:>2.2%}   avgLoss: {avgLoss:.2f}   '
-                  f'learningRate: {learningRate}')
-        # save net
-        torch.save(net.state_dict(), outputFileName)
-
-
-# valueData
-def trainValue(net, outputFileName, epoch=10):
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.5)
-    loss_function = nn.MSELoss()
-
-    inputData, outputData = torch.load('valueData.pt')
-
-    # selectInterval = 5
-    # inputData = inputData[::selectInterval]
-    # outputData = outputData[::selectInterval]
-
-    trainInputData, trainOutputData, testInputData, testOutputData = splitData(inputData, outputData, 0.8)
-
-    # use cuda to train
-    net.to(device)
-
-    # batch size
-    batchSize = 100
-    batchCount = int(len(trainInputData) / batchSize)
-
-    logInterval = 1000
-
-    testBatchCount = int(len(testInputData) / batchSize)
-    totalLoss = 0
-    totalCorrectCount = 0
-
-    for epoch in range(epoch):
-        totalLoss = 0
-        totalCorrectCount = 0
-
-        for i in range(batchCount):
-            # get batch data
-            inputDataBatch = trainInputData[i * batchSize:(i + 1) * batchSize]
-            outputDataBatch = trainOutputData[i * batchSize:(i + 1) * batchSize]
-
-            print("inputDataBatch size:",inputDataBatch.shape)
-            # print("outputDataBatch",outputDataBatch)
-
-            # use cuda to train
-            inputDataBatch = inputDataBatch.to(device)
-            outputDataBatch = outputDataBatch.to(device)
-
-            # forward
-            output = net(inputDataBatch)
-            print("output",output.shape)
-            outputInt = torch.round(output)
-
-            # 打印形状进行调试
-            print(f"Epoch {epoch}, Batch {i}")
-            print(f"output shape: {output.shape}")
-            print(f"outputDataBatch shape: {outputDataBatch.shape}")
-
-            # 确保形状匹配
-            if output.shape != outputDataBatch.shape:
-                outputDataBatch = outputDataBatch.view(output.shape)
-                
-            correctCount = torch.sum(outputInt == outputDataBatch).item()
-            totalCorrectCount += correctCount
-
-            # backward
-            loss = loss_function(output, outputDataBatch.float())
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            totalLoss += loss.item()
-
-            # print
-            if i % logInterval == 0 and i != 0:
-                avgLoss = totalLoss / logInterval
-                correctRate = totalCorrectCount / (logInterval * batchSize)
-                print(f'epoch: {epoch:3}   batch: {i:>5}   correctRate: {correctRate:.2%}   avgLoss: {avgLoss:.2f}')
-                totalCorrectCount = 0
-                totalLoss = 0
+            if batch_idx % 10 == 0 and batch_idx != 0:
+                avg_loss = total_loss / 10
+                accuracy = correct / total * 100
+                print(f"Epoch {ep:02d} Batch {batch_idx:04d}  Accuracy: {accuracy:.2f}%  AvgLoss: {avg_loss:.4f}")
+                total_loss = 0
+                correct = 0
+                total = 0
 
         scheduler.step()
 
-        totalCorrectCount = 0
-        totalLoss = 0
-
-        # test
+        # ==== Test ====
+        net.eval()
+        test_loss = 0
+        test_correct = 0
         with torch.no_grad():
-            for i in range(testBatchCount):
-                testInputDataBatch = testInputData[i * batchSize:(i + 1) * batchSize]
-                testOutputDataBatch = testOutputData[i * batchSize:(i + 1) * batchSize].reshape(-1)
+            for inputs, targets in test_loader:
+                inputs, targets = inputs.to(device), targets.view(-1).to(device)
+                outputs = net(inputs)
+                loss = loss_function(outputs, targets)
 
-                testInputDataBatch = testInputDataBatch.to(device)
-                testOutputDataBatch = testOutputDataBatch.to(device)
+                test_loss += loss.item()
+                test_correct += (outputs.argmax(dim=1) == targets).sum().item()
 
-                output = net(testInputDataBatch)
-                outputInt = torch.round(output)
-                correctCount = torch.sum(outputInt == testOutputDataBatch).item()
-                totalCorrectCount += correctCount
+        test_acc = test_correct / len(test_dataset) * 100
+        avg_test_loss = test_loss / len(test_loader)
+        current_lr = scheduler.get_last_lr()[0]
+        acc_record.append((ep, test_acc, avg_test_loss))
 
-                loss = loss_function(output, testOutputDataBatch)
-                totalLoss += loss.item()
+        print(f"Epoch {ep:02d} [Test] Accuracy: {test_acc:.2f}%  AvgLoss: {avg_test_loss:.4f}  LR: {current_lr:.5f}")
 
-            correctRate = totalCorrectCount / len(testInputData)
-            avgLoss = totalLoss / len(testInputData) * batchSize
-            learningRate = optimizer.param_groups[0]['lr']
-            print(f'epoch: {epoch:3}                  correctRate: {correctRate:>2.2%}   avgLoss: {avgLoss:.2f}   '
-                  f'learningRate: {learningRate}')
-        # save net
-        torch.save(net.state_dict(), outputFileName)
+        # ==== Save model checkpoint ====
+        model_path = os.path.join(output_dir, f'policy_epoch_{ep:02d}.pt')
+        torch.save(net.state_dict(), model_path)
 
+        # Keep only the latest 10 models
+        all_ckpts = sorted(glob.glob(os.path.join(output_dir, 'policy_epoch_*.pt')))
+        if len(all_ckpts) > 10:
+            os.remove(all_ckpts[0])
 
-# python3 train.py policyNet
-# if len(sys.argv) == 2:
-#     if sys.argv[1] == 'policyNet':
-#         net = PolicyNetwork()
-#         trainPolicy(net, 'policyNet.pt', 40)
-#     elif sys.argv[1] == 'playoutNet':
-#         net = PlayoutNetwork()
-#         trainPolicy(net, 'playoutNet.pt', 5)
-#     elif sys.argv[1] == 'valueNet':
-#         net = ValueNetwork()
-#         trainValue(net, 'valueNet.pt', 8)
-# else:
-#     net = PolicyNetwork()
-#     trainValue(net, 'policyNet.pt', 8)
+        # Update best model
+        if test_acc > best_acc:
+            best_acc = test_acc
+            best_model_path = os.path.join(output_dir, 'best_model.pt')
+            torch.save(net.state_dict(), best_model_path)
+            print(f'New best model saved at epoch {ep:02d} with accuracy {best_acc:.2f}%')
+
+    # Save accuracy log for later analysis
+    acc_log_path = os.path.join(output_dir, 'accuracy_log.txt')
+    with open(acc_log_path, 'w') as f:
+        for ep, acc, loss in acc_record:
+            f.write(f'Epoch {ep:02d} | Accuracy: {acc:.2f}% | Loss: {loss:.4f}\n')
 
 
-net = ValueNetwork()
-trainValue(net, 'valueNet.pt', 8)
+
+
+if __name__ == '__main__':
+    net = PolicyNetwork()
+    trainPolicy(net,'checkpoints',30)
+
+
+
