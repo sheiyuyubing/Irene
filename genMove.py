@@ -9,32 +9,16 @@ torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 np.random.seed(0)
 
-programPath = os.path.dirname(os.path.realpath(__file__))
+
 
 # load net.pt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 policyNet = PolicyNetwork()
-policyNet.load_state_dict(torch.load(programPath + '\\policyNet.pt', map_location=device))
-policyNet.to(device)
-
-# policyNet = PolicyNetwork()
-# policyNet.load_state_dict(torch.load(programPath + '\\policyNet.pt'))
-
-# playoutNet = PlayoutNetwork()
-# playoutNet.load_state_dict(torch.load(programPath + '\\playoutNet.pt'))
-
 playoutNet = PlayoutNetwork()
-playoutNet.load_state_dict(torch.load(programPath + '\\playoutNet.pt', map_location=device))
-playoutNet.to(device)
-
-# valueNet = ValueNetwork()
-# valueNet.load_state_dict(torch.load(programPath + '\\valueNet.pt'))
-
 valueNet = ValueNetwork()
-valueNet.load_state_dict(torch.load(programPath + '\\valueNet.pt', map_location=device))
-valueNet.to(device)
+
+
 
 colorCharToIndex = {'B': 1, 'W': -1, 'b': 1, 'w': -1}
 indexToColorChar = {1: 'B', -1: 'W'}
@@ -59,42 +43,50 @@ def toStrPosition(x, y):
     return f'{y}{x}'
 
 
-def getPolicyNetResult(go, willPlayColor):
-    inputData = getAllFeatures(go, willPlayColor)
+def getPolicyNetResult(go,at):
+    inputData = getAllFeatures(go)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
+    policyNet.load_state_dict(torch.load(at, map_location=device))
+    policyNet.to(device)
     predict = policyNet(inputData)[0]
     return predict
 
 
-def getPlayoutNetResult(go, willPlayColor):
-    inputData = getAllFeatures(go, willPlayColor)
+def getPlayoutNetResult(go,at):
+    inputData = getAllFeatures(go)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
+    playoutNet.load_state_dict(torch.load(at, map_location=device))
+    playoutNet.to(device)
     predict = playoutNet(inputData)[0]
     return predict
 
 
-def getValueNetResult(go, willPlayColor):
-    inputData = getAllFeatures(go, willPlayColor)
+def getValueNetResult(go,at):
+    inputData = getAllFeatures(go)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
+    valueNet.load_state_dict(torch.load(at, map_location=device))
+    valueNet.to(device)
     value = valueNet(inputData)[0].item()
     return value
 
 
-def getValueResult(go, willPlayColor):
+def getValueResult(go):
     # predict = playoutNet(inputData)[0, 361]
     # return 1 - predict.item()
+    willPlayColor = go.current_color
 
     countThisColor = np.sum(go.board == willPlayColor)
     countAnotherColor = np.sum(go.board == -willPlayColor)
     return countThisColor - countAnotherColor
 
 
-def genMovePolicy(go, willPlayColor):
-    predict = getPolicyNetResult(go, willPlayColor)
-    predictReverseSortIndex = reversed(torch.argsort(predict))
+def genMovePolicy(go,at):
 
+    predict = getPolicyNetResult(go,at)
+    predictReverseSortIndex = reversed(torch.argsort(predict))
+    willPlayColor = go.current_color
     # sys err valueNet output
-    value = getValueResult(go, willPlayColor)
+    value = getValueResult(go)
     sys.stderr.write(f'{willPlayColor} {value}\n')
 
     # with open('valueOutput.txt', 'a') as f:
@@ -105,7 +97,7 @@ def genMovePolicy(go, willPlayColor):
         if (x, y) == (None, None):
             print('pass')
             return
-        moveResult = go.move(willPlayColor, x, y)
+        moveResult = go.move(x, y)
         strPosition = toStrPosition(x, y)
 
         if moveResult == False:
@@ -115,10 +107,12 @@ def genMovePolicy(go, willPlayColor):
             break
 
 
+
+
 class MCTSNode:
-    def __init__(self, go, willPlayColor, parent):
+    def __init__(self, go,  parent):
         self.go = go.clone()
-        self.color = willPlayColor
+        self.color = go.current_color
         self.parent = parent
         self.children = []
         self.N = 0  # visit count
@@ -198,7 +192,7 @@ def searchChildren(node):
     go = node.go
     nodeWillPlayColor = node.color
 
-    predict = getPolicyNetResult(go, nodeWillPlayColor)
+    predict = getPolicyNetResult(go)
     predictReverseSortIndex = reversed(torch.argsort(predict))
 
     count = 0
@@ -264,14 +258,14 @@ def MCTS(root):
     return bestNextNode
 
 
-def genMoveMCTS(go, willPlayColor):
-    root = MCTSNode(go, willPlayColor, None)
+def genMoveMCTS(go):
+    root = MCTSNode(go, None)
 
     bestNextNode = MCTS(root)
     bestMove = bestNextNode.go.history[-1]
 
     if debug:
-        playoutResult = getPlayoutNetResult(go, willPlayColor)
+        playoutResult = getPlayoutNetResult(go)
         playoutMove = toPosition(torch.argmax(playoutResult))
         print(playoutMove, bestMove, playoutMove == bestMove)
         for child in root.children:
@@ -281,7 +275,7 @@ def genMoveMCTS(go, willPlayColor):
         sys.stderr.write(str(child) + '\n')
 
     x, y = bestMove
-    moveResult = go.move(willPlayColor, x, y)
+    moveResult = go.move( x, y)
     strPosition = toStrPosition(x, y)
 
     if moveResult == False:
