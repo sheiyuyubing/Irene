@@ -16,6 +16,9 @@ def get_path(relative_path):
 
 go = Go()
 
+at = "data/policy_batches/policy_batch_000.pt" # 可以修改地址来选择不同的模型
+
+
 # stderr output 'GTP ready'
 sys.stderr.write('GTP ready\n')
 
@@ -68,9 +71,9 @@ while True:
         go.current_color = colorCharToIndex[colorChar]
 
         if len(sys.argv) > 1 and sys.argv[1] == 'MCTS':
-            genMoveMCTS(go)
+            genMoveMCTS(go,at)
         else:
-            genMovePolicy(go)
+            genMovePolicy(go,at)
 
     elif line.startswith('showboard'):
         for i in range(19):
