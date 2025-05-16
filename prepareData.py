@@ -1,150 +1,203 @@
+import os
+import torch
+import numpy as np
+from pathlib import Path
 from sgfmill import sgf
 from go import *
-import torch
 from features import getAllFeatures
-# import matplotlib.pyplot as plt
 
 colorCharToIndex = {'B': 1, 'W': -1, 'b': 1, 'w': -1}
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# @jit
 def preparePolicySgfFile(fileName):
     with open(fileName, 'rb') as f:
         game = sgf.Sgf_game.from_bytes(f.read())
-    sequence = game.get_main_sequence()
 
+    # 跳过非 19x19 棋谱
+    if game.get_size() != 19:
+        raise Exception("Non-19x19 board")
+
+    sequence = game.get_main_sequence()
     winnerChar = game.get_winner()
 
     validSequence = []
     for node in sequence:
-        # print(node.get_move())
         move = node.get_move()
-        if move[1]:
-            validSequence.append(move)
+        if move[0] is None or move[1] is None:
+            continue
+        if move[0] not in colorCharToIndex:
+            continue
+        validSequence.append(move)
+
+    # 跳过无落子的棋谱
+    if len(validSequence) == 0:
+        raise Exception("Empty game")
 
     go = Go()
 
-    # append go.board to inputData
     inputData = []
     policyOutput = []
 
     for move in validSequence:
         willPlayColor = colorCharToIndex[move[0]]
-        x = move[1][0]
-        y = move[1][1]
+        x, y = move[1]
         inputData.append(getAllFeatures(go, willPlayColor))
         policyOutput.append(toDigit(x, y))
 
-        if go.move(willPlayColor, x, y) == False:
-            raise Exception('Invalid move')
+        if not go.move(willPlayColor, x, y):
+            raise Exception("Invalid move")
 
     willPlayColor = -willPlayColor
     inputData.append(getAllFeatures(go, willPlayColor))
     policyOutput.append(19 * 19)  # pass
 
-    # use torch to load data
     inputData = torch.tensor(np.array(inputData)).bool()
     policyOutput = torch.tensor(np.array(policyOutput)).long().reshape(-1)
 
     return inputData, policyOutput
 
 
-def prepareValueSgfFile(fileName):
-    with open(fileName, 'rb') as f:
-        game = sgf.Sgf_game.from_bytes(f.read())
-    sequence = game.get_main_sequence()
+def preparePolicyData(fileCount, batch_size=1000, save_dir="data/policy_batches"):
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    winnerChar = game.get_winner()
-    winner = colorCharToIndex[winnerChar]
-
-    validSequence = []
-    for node in sequence:
-        # print(node.get_move())
-        move = node.get_move()
-        if move[1]:
-            validSequence.append(move)
-
-    go = Go()
-
-    # append go.board to inputData
-
-    for move in validSequence:
-        willPlayColor = colorCharToIndex[move[0]]
-        x = move[1][0]
-        y = move[1][1]
-
-        if go.move(willPlayColor, x, y) == False:
-            raise Exception('Invalid move')
-
-    willPlayColor = -willPlayColor
-    valueInputData = np.array([getAllFeatures(go, willPlayColor)])
-    valueOutput = np.array([winner == willPlayColor])
-
-    # use torch to load data
-    valueInputData = torch.tensor(valueInputData).bool()
-    valueOutput = torch.tensor(valueOutput).long().reshape(-1)
-
-    return valueInputData, valueOutput
-
-
-def preparePolicyData(fileCount):
-    with open('allValid2.txt', 'r',encoding="latin1") as allValidFile:
+    with open('games/allValid2.txt', 'r',encoding='utf-8') as allValidFile:
         allValidLines = allValidFile.readlines()
 
     allInputData = []
     allPolicyOutput = []
+    batch_idx = 0
+    processed = 0
 
-    for sgfFile in allValidLines[:fileCount]:
+    for i, sgfFile in enumerate(allValidLines[:fileCount]):
         try:
             sgfFile = sgfFile.strip()
             inputData, policyOutput = preparePolicySgfFile(sgfFile)
+
             allInputData.append(inputData)
             allPolicyOutput.append(policyOutput)
+            processed += 1
+
+            if processed % batch_size == 0:
+                inputTensor = torch.cat(allInputData)
+                outputTensor = torch.cat(allPolicyOutput)
+
+                save_path = os.path.join(save_dir, f"policy_batch_{batch_idx:03d}.pt")
+                torch.save((inputTensor.cpu(), outputTensor.cpu()), save_path)
+                print(f"Saved batch {batch_idx} with {inputTensor.shape[0]} samples to {save_path}")
+
+                allInputData.clear()
+                allPolicyOutput.clear()
+                batch_idx += 1
 
         except KeyboardInterrupt:
             exit()
         except Exception as e:
+            print(f"Error: {sgfFile}")
             print(e)
-            print('Error: ' + sgfFile)
 
-    ansInputData = torch.cat(allInputData)
-    ansPolicyOutput = torch.cat(allPolicyOutput)
-
-    del allInputData
-    del allPolicyOutput
-
-    assert ansInputData.shape[0] == ansPolicyOutput.shape[0]
-
-    torch.save((ansInputData, ansPolicyOutput), 'policyData.pt')
+    if allInputData:
+        inputTensor = torch.cat(allInputData)
+        outputTensor = torch.cat(allPolicyOutput)
+        save_path = os.path.join(save_dir, f"policy_batch_{batch_idx:03d}.pt")
+        torch.save((inputTensor.cpu(), outputTensor.cpu()), save_path)
+        print(f"Saved final batch {batch_idx} with {inputTensor.shape[0]} samples to {save_path}")
 
 
-def prepareValueData(fileCount):
-    with open('allValid2.txt', 'r',encoding="latin1") as allValidFile:
+
+
+
+def prepareValueSgfFile(fileName):
+    with open(fileName, 'rb') as f:
+        game = sgf.Sgf_game.from_bytes(f.read())
+
+    # 跳过非19x19棋谱
+    if game.get_size() != 19:
+        raise Exception("Non-19x19 board")
+
+    sequence = game.get_main_sequence()
+    winnerChar = game.get_winner()
+    if winnerChar is None:
+        raise Exception("No winner info")
+
+    winner = colorCharToIndex.get(winnerChar)
+    if winner is None:
+        raise Exception("Unknown winner color")
+
+    validSequence = []
+    for node in sequence:
+        move = node.get_move()
+        if move[0] is None or move[1] is None:
+            continue
+        if move[0] not in colorCharToIndex:
+            continue
+        validSequence.append(move)
+
+    # 跳过无落子的棋谱
+    if len(validSequence) == 0:
+        raise Exception("Empty game")
+
+    go = Go()
+
+    for move in validSequence:
+        willPlayColor = colorCharToIndex[move[0]]
+        x, y = move[1]
+
+        if not go.move(willPlayColor, x, y):
+            raise Exception("Invalid move")
+
+    willPlayColor = -willPlayColor
+    valueInputData = torch.tensor(np.array([getAllFeatures(go, willPlayColor)])).bool()
+    valueOutput = torch.tensor(np.array([winner == willPlayColor])).long().reshape(-1)
+
+    return valueInputData, valueOutput
+
+
+def prepareValueData(fileCount, batch_size=1000, save_dir="data/value_batches"):
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+
+    with open('games/allValid2.txt', 'r', encoding='utf-8') as allValidFile:
         allValidLines = allValidFile.readlines()
 
-    allValueInputData = []
-    allValueOutput = []
+    allInputData = []
+    allOutputData = []
+    batch_idx = 0
+    processed = 0
 
-    for sgfFile in allValidLines[:fileCount]:
+    for i, sgfFile in enumerate(allValidLines[:fileCount]):
         try:
             sgfFile = sgfFile.strip()
-            valueInputData, valueOutput = prepareValueSgfFile(sgfFile)
-            allValueInputData.append(valueInputData)
-            allValueOutput.append(valueOutput)
+            valueInput, valueOutput = prepareValueSgfFile(sgfFile)
+
+            allInputData.append(valueInput)
+            allOutputData.append(valueOutput)
+            processed += 1
+
+            if processed % batch_size == 0:
+                inputTensor = torch.cat(allInputData)
+                outputTensor = torch.cat(allOutputData)
+
+                save_path = os.path.join(save_dir, f"value_batch_{batch_idx:03d}.pt")
+                torch.save((inputTensor.cpu(), outputTensor.cpu()), save_path)
+                print(f"Saved batch {batch_idx} with {inputTensor.shape[0]} samples to {save_path}")
+
+                allInputData.clear()
+                allOutputData.clear()
+                batch_idx += 1
 
         except KeyboardInterrupt:
             exit()
-        except Exception:
-            print('Error: ' + sgfFile)
+        except Exception as e:
+            print(f"Error: {sgfFile}")
+            print(e)
 
-    allValueInputData = torch.cat(allValueInputData)
-    allValueOutput = torch.cat(allValueOutput)
-
-    assert allValueInputData.shape[0] == allValueOutput.shape[0]
-
-    torch.save((allValueInputData, allValueOutput), 'valueData.pt')
+    if allInputData:
+        inputTensor = torch.cat(allInputData)
+        outputTensor = torch.cat(allOutputData)
+        save_path = os.path.join(save_dir, f"value_batch_{batch_idx:03d}.pt")
+        torch.save((inputTensor.cpu(), outputTensor.cpu()), save_path)
+        print(f"Saved final batch {batch_idx} with {inputTensor.shape[0]} samples to {save_path}")
 
 
 if __name__ == '__main__':
-    preparePolicyData(30000)
-    prepareValueData(20000)
+    preparePolicyData(300)
+    # prepareValueData(20000)
