@@ -11,6 +11,7 @@ class Go:
         self.liberty = np.zeros((size, size), dtype=np.int8)
         self.previousBoard = np.zeros((size, size), dtype=np.int8)
         self.history = [(None, None)] * 8
+        self.current_color = 1  # 1 for black, -1 for white
 
     def clone(self):
         go = Go(self.size)
@@ -18,9 +19,15 @@ class Go:
         go.liberty = np.array(self.liberty)
         go.previousBoard = np.array(self.previousBoard)
         go.history = list(self.history)
+        go.current_color =  self.current_color
         return go
 
-    def move(self, color, x, y):
+    def current_player(self):
+        return self.current_color
+
+    def move(self,  x, y):
+        color = self.current_color
+
         # 0. 检查输入是否合法
         if x < 0 or x >= self.size or y < 0 or y >= self.size:
             return False
@@ -59,9 +66,13 @@ class Go:
             self.board = self.previousBoard
             return False
 
+        self.current_color = -color
         self.history.append((x, y))
 
         return True
+
+    def game_over(self):
+        return self.pass_count >= 2
 
     def clearColorNear(self, color, x, y):
         if self.board[x, y] != color:
