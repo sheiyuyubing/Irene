@@ -35,11 +35,14 @@ while True:
     if line == 'clear_board':
         go = Go()
         print('clear_board')
+
     elif line.startswith('play'):
         # play B F12
         color, position = line.split()[1:]
+
         if position == 'pass':
             print('play PASS')
+            go.current_color = -color
         else:
             # position = F12
             y, x = position[0], position[1:]
@@ -54,17 +57,20 @@ while True:
 
             color = colorCharToIndex[color]
 
-            if go.move(color, x, y) == False:
+            if go.move(x, y) == False:
                 print('Illegal move')
             else:
                 print('ok')
+
+
     elif line.startswith('genmove'):
         colorChar = line.split()[1]
-        willPlayColor = colorCharToIndex[colorChar]
+        go.current_color = colorCharToIndex[colorChar]
+
         if len(sys.argv) > 1 and sys.argv[1] == 'MCTS':
-            genMoveMCTS(go, willPlayColor)
+            genMoveMCTS(go)
         else:
-            genMovePolicy(go, willPlayColor)
+            genMovePolicy(go)
 
     elif line.startswith('showboard'):
         for i in range(19):
@@ -107,7 +113,7 @@ while True:
             colorChar = tokens[1]
             willPlayColor = colorCharToIndex[colorChar]
             interval =  int(tokens[2])
-            start_analysis(go, willPlayColor,interval)
+            start_analysis(go,interval)
 
             # print(f"info move D4 visits 100 winrate 55.0 prior 0.05")
             # print(f"info move Q16 visits 80 winrate 52.5 prior 0.04")
