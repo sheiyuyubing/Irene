@@ -1,4 +1,4 @@
-encodings ='utf-8'
+# coding=utf-8
 from torch.utils.data import Dataset, DataLoader
 import torch
 import os
@@ -22,5 +22,5 @@ if __name__ == '__main__':
 
     for batch_idx, (inputs, targets) in enumerate(loader):
         print(f"Batch {batch_idx}: {inputs.shape}, {targets.shape}")
-        if batch_idx >= 2:  # Ö»ÅÜ¼¸¸ö batch ¿´ÊÇ·ñÕı³£
+        if batch_idx >= 2:  # åªè·‘å‡ ä¸ª batch çœ‹æ˜¯å¦æ­£å¸¸
             break
