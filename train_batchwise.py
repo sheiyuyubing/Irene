@@ -69,3 +69,6 @@ def trainPolicyBatchwise(net, data_dir='data/policy_batches', output_dir='checkp
 
         torch.save(net.state_dict(), os.path.join(output_dir, f'policy_epoch_{ep:02d}.pt'))
 
+if __name__ == '__main__':
+    net = PolicyNetwork()
+    trainPolicyBatchwise(net,'checkpoints',30)
