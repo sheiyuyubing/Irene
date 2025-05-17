@@ -1,3 +1,4 @@
+encodings ='utf-8'
 from torch.utils.data import Dataset, DataLoader
 import torch
 import os
