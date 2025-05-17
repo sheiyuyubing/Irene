@@ -1,3 +1,4 @@
+# coding=utf-8
 import torch
 import os
 import glob
@@ -18,7 +19,7 @@ class LightDataset(Dataset):
     def __getitem__(self, idx):
         return self.inputs[idx], self.targets[idx]
 
-# ±£´æÍ¼Ïñ²¢ÏÔÊ¾
+# ä¿å­˜å›¾åƒå¹¶æ˜¾ç¤º
 def plot_accuracy_loss(acc_record, save_path='accuracy_plot.png'):
     epochs = [x[0] for x in acc_record]
     accuracies = [x[1] for x in acc_record]
@@ -39,7 +40,7 @@ def plot_accuracy_loss(acc_record, save_path='accuracy_plot.png'):
     plt.title('Test Accuracy and Loss over Epochs')
     fig.tight_layout()
     plt.savefig(save_path)
-    print(f'[Í¼ÒÑ±£´æ] Accuracy & Loss Í¼Ïñ±£´æµ½: {save_path}')
+    print(f'[å›¾å·²ä¿å­˜] Accuracy & Loss å›¾åƒä¿å­˜åˆ°: {save_path}')
 
 def train_on_file(net, file_path, optimizer, loss_fn, batch_size=64):
     dataset = LightDataset(file_path)
@@ -97,7 +98,7 @@ def trainPolicyBatchwise(net, data_dir='data/policy_batches', output_dir='checkp
 
         torch.save(net.state_dict(), os.path.join(output_dir, f'policy_epoch_{ep:02d}.pt'))
 
-    # ±£´æÈÕÖ¾ºÍÍ¼Ïñ
+    # ä¿å­˜æ—¥å¿—å’Œå›¾åƒ
     acc_log_path = os.path.join(output_dir, 'accuracy_log.txt')
     with open(acc_log_path, 'w') as f:
         for ep, acc, loss in acc_record:
