@@ -71,4 +71,4 @@ def trainPolicyBatchwise(net, data_dir='data/policy_batches', output_dir='checkp
 
 if __name__ == '__main__':
     net = PolicyNetwork()
-    trainPolicyBatchwise(net,'checkpoints',30)
+    trainPolicyBatchwise(net,epoch=30 ,output_dir='checkpoints')
