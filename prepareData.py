@@ -1,4 +1,4 @@
-encoding = 'utf-8'
+# coding=utf-8
 import os
 import torch
 import numpy as np
@@ -14,7 +14,7 @@ def preparePolicySgfFile(fileName):
     with open(fileName, 'rb') as f:
         game = sgf.Sgf_game.from_bytes(f.read())
 
-    # Ìø¹ı·Ç 19x19 ÆåÆ×
+    # è·³è¿‡é 19x19 æ£‹è°±
     if game.get_size() != 19:
         raise Exception("Non-19x19 board")
 
@@ -30,7 +30,7 @@ def preparePolicySgfFile(fileName):
             continue
         validSequence.append(move)
 
-    # Ìø¹ıÎŞÂä×ÓµÄÆåÆ×
+    # è·³è¿‡æ— è½å­çš„æ£‹è°±
     if len(validSequence) == 0:
         raise Exception("Empty game")
 
@@ -111,7 +111,7 @@ def prepareValueSgfFile(fileName):
     with open(fileName, 'rb') as f:
         game = sgf.Sgf_game.from_bytes(f.read())
 
-    # Ìø¹ı·Ç19x19ÆåÆ×
+    # è·³è¿‡é19x19æ£‹è°±
     if game.get_size() != 19:
         raise Exception("Non-19x19 board")
 
@@ -133,7 +133,7 @@ def prepareValueSgfFile(fileName):
             continue
         validSequence.append(move)
 
-    # Ìø¹ıÎŞÂä×ÓµÄÆåÆ×
+    # è·³è¿‡æ— è½å­çš„æ£‹è°±
     if len(validSequence) == 0:
         raise Exception("Empty game")
 
