@@ -41,14 +41,14 @@ def preparePolicySgfFile(fileName):
     for move in validSequence:
         willPlayColor = colorCharToIndex[move[0]]
         x, y = move[1]
-        inputData.append(getAllFeatures(go, willPlayColor))
+        inputData.append(getAllFeatures(go))
         policyOutput.append(toDigit(x, y))
 
-        if not go.move(willPlayColor, x, y):
+        if not go.move( x, y):
             raise Exception("Invalid move")
 
     willPlayColor = -willPlayColor
-    inputData.append(getAllFeatures(go, willPlayColor))
+    inputData.append(getAllFeatures(go))
     policyOutput.append(19 * 19)  # pass
 
     inputData = torch.tensor(np.array(inputData)).bool()
@@ -142,11 +142,11 @@ def prepareValueSgfFile(fileName):
         willPlayColor = colorCharToIndex[move[0]]
         x, y = move[1]
 
-        if not go.move(willPlayColor, x, y):
+        if not go.move( x, y):
             raise Exception("Invalid move")
 
     willPlayColor = -willPlayColor
-    valueInputData = torch.tensor(np.array([getAllFeatures(go, willPlayColor)])).bool()
+    valueInputData = torch.tensor(np.array([getAllFeatures(go)])).bool()
     valueOutput = torch.tensor(np.array([winner == willPlayColor])).long().reshape(-1)
 
     return valueInputData, valueOutput
