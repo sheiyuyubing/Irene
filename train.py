@@ -12,7 +12,7 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 
 class PolicyBatchDataset(Dataset):
-    def __init__(self, data_dir='data/policy_batches', pattern='policyData_part*.pt'):
+    def __init__(self, data_dir='data/policy_batches', pattern = 'policy_batch_*.pt'):
         self.file_paths = sorted(glob.glob(os.path.join(data_dir, pattern)))
         self.index_map = []
 
