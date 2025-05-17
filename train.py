@@ -48,7 +48,7 @@ def trainPolicy(net, output_dir='checkpoints', epoch=10):
     test_size = total_size - train_size
     train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
 
-    batch_size = 100
+    batch_size = 32
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
