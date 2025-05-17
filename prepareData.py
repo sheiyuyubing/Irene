@@ -200,5 +200,5 @@ def prepareValueData(fileCount, batch_size=1000, save_dir="data/value_batches"):
 
 
 if __name__ == '__main__':
-    preparePolicyData(300)
+    preparePolicyData(30000)
     # prepareValueData(20000)
