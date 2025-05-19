@@ -62,36 +62,65 @@ def self_play_game(black_model_dir, white_model_dir, sgf_path=None):
     return records, winner
 
 
-def train_policy_gradient(model, value_model, data, epochs=5, lr=5e-4):
-    model.train()
+def train_policy_gradient(policy_model, value_model, data, old_policy_model=None,
+                          epochs=5, lr=5e-4, entropy_coef=1e-3):
+    policy_model.train()
     value_model.eval()
 
+    # 准备训练数据
     states, actions, rewards = zip(*data)
     states = torch.stack([torch.tensor(s, dtype=torch.float32) for s in states]).to(device)
     actions = torch.tensor(actions).to(device)
     rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
 
-    baseline = value_model(states).squeeze().detach()
+    # 基线（来自值网络）
+    with torch.no_grad():
+        baseline = value_model(states).squeeze()
     advantages = rewards - baseline
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # 标准化 advantage
+    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+    optimizer = torch.optim.Adam(policy_model.parameters(), lr=lr)
 
     for epoch in range(epochs):
+        total_loss = 0.0
         for i in range(0, len(states), 64):
             batch_states = states[i:i+64]
             batch_actions = actions[i:i+64]
-            batch_adv = advantages[i:i+64]
+            batch_advantages = advantages[i:i+64]
 
-            logits = model(batch_states)
-            log_probs = torch.log_softmax(logits, dim=1)
+            logits = policy_model(batch_states)
+            log_probs = F.log_softmax(logits, dim=1)
+            probs = F.softmax(logits, dim=1)
             selected_log_probs = log_probs[range(len(batch_actions)), batch_actions]
-            loss = -(selected_log_probs * batch_adv).mean()
+
+            # 熵正则项（鼓励探索）
+            entropy = -torch.sum(probs * log_probs, dim=1).mean()
+
+            # 若提供旧策略，计算重要性采样比率（PPO 的思想）
+            if old_policy_model is not None:
+                with torch.no_grad():
+                    old_logits = old_policy_model(batch_states)
+                    old_log_probs = F.log_softmax(old_logits, dim=1)
+                    old_selected_log_probs = old_log_probs[range(len(batch_actions)), batch_actions]
+                ratios = torch.exp(selected_log_probs - old_selected_log_probs)
+                policy_loss = -torch.mean(ratios * batch_advantages)
+            else:
+                policy_loss = -torch.mean(selected_log_probs * batch_advantages)
+
+            # 总损失 = 策略损失 - 熵奖励
+            loss = policy_loss - entropy_coef * entropy
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-        print(f"[PolicyNet] Epoch {epoch+1}, Loss: {loss.item():.4f}")
+            total_loss += loss.item()
+
+        avg_loss = total_loss / (len(states) // 64 + 1)
+        print(f"[PolicyNet] Epoch {epoch+1}, Loss: {avg_loss:.4f}")
+
 
 
 def train_value_network(model, data, epochs=5, lr=5e-4):
