@@ -111,7 +111,7 @@ while True:
 
     # 新增：分析模式
     elif line.startswith('analyze'):
-        # 示例：analyze B 5 
+        # 示例：analyze B 5
         tokens = line.split()
         if len(tokens) >= 2:
             colorChar = tokens[1]
