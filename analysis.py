@@ -7,9 +7,9 @@ analyze_thread = None
 
 import torch
 
-def get_top_moves(go, topk=5):
-    policy = getPolicyNetResult(go)  # shape: (361,)
-    value = getValueNetResult(go)    # float 0.0~1.0
+def get_top_moves(go, topk=5,policy_dir,value_dir):
+    policy = getPolicyNetResult(go,policy_dir)  # shape: (361,)
+    value = getValueNetResult(go,value_dir)    # float 0.0~1.0
     winrate = int(value * 100)  # 转换为 GTP 需要的整数格式
 
     # 获取预测中前 topk 个动作的位置索引（降序）
@@ -38,7 +38,7 @@ def get_top_moves(go, topk=5):
 
 
 
-def start_analysis(go, interval):
+def start_analysis(go, interval,policy_dir,value_dir):
     global analyze_thread, stop_event
 
     stop_event.clear()
@@ -47,7 +47,7 @@ def start_analysis(go, interval):
 
         while not stop_event.is_set():
             # 这里模拟输出 info move
-            move_stats = get_top_moves(go)  # 返回多个 move 的 dict
+            move_stats = get_top_moves(go,policy_dir,value_dir)  # 返回多个 move 的 dict
             for stat in move_stats:
                 print("info", end=' ')
                 for key, value in stat.items():
