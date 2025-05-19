@@ -135,8 +135,8 @@ def selfplay_train_pipeline(
 
 if __name__ == '__main__':
     selfplay_train_pipeline(
-        best_model_path='checkpoints/checkpoints/best_model.pt',
-        model_pool_dir='checkpoints/checkpoints',
+        best_model_path='checkpoints/best_model.pt',
+        model_pool_dir='checkpoints',
         sgf_dir='games/sgf_selfplay',
         selfplay_games=100,
         train_epochs=5
