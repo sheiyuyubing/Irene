@@ -16,7 +16,7 @@ def get_path(relative_path):
 
 go = Go()
 
-at = "data/policy_batches/policy_batch_000.pt" # 可以修改地址来选择不同的模型
+at = get_path("checkpoints/best_model.pt")
 
 
 # stderr output 'GTP ready'
