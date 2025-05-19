@@ -132,6 +132,39 @@ def trainPolicy(net, output_dir='checkpoints', epoch=10):
 
 
 
+
+
+
+def train_value_network(value_net, data, epochs=5, lr=1e-3):
+    value_net.to(device)
+    optimizer = torch.optim.Adam(value_net.parameters(), lr=lr)
+    criterion = nn.MSELoss()
+    value_net.train()
+
+    states, values = zip(*data)
+    states = torch.stack(states).to(device)
+    values = torch.tensor(values, dtype=torch.float32).to(device)
+
+    for epoch in range(epochs):
+        total_loss = 0
+        batch_size = 64
+        for i in range(0, len(states), batch_size):
+            batch_states = states[i:i+batch_size]
+            batch_values = values[i:i+batch_size]
+
+            preds = value_net(batch_states)
+            loss = criterion(preds, batch_values)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item() * batch_states.size(0)
+
+        avg_loss = total_loss / len(states)
+        print(f"ValueNet Epoch {epoch+1}, Loss: {avg_loss:.4f}")
+
+
+
 if __name__ == '__main__':
     net = PolicyNetwork()
     trainPolicy(net,'checkpoints',30)
