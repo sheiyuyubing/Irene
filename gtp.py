@@ -16,8 +16,8 @@ def get_path(relative_path):
 
 go = Go()
 
-at = get_path("checkpoints/best_model.pt")
-
+policy_dir  = get_path("checkpoints/best_model.pt")
+value_dir = get_path("checkpoints/value_model_cycle_048.pt")
 
 # stderr output 'GTP ready'
 sys.stderr.write('GTP ready\n')
@@ -72,9 +72,9 @@ while True:
         go.current_color = colorCharToIndex[colorChar]
 
         if len(sys.argv) > 1 and sys.argv[1] == 'MCTS':
-            genMoveMCTS(go,at)
+            genMoveMCTS(go,policy_dir)
         else:
-            genMovePolicy(go,at)
+            genMovePolicy(go,policy_dir)
 
     elif line.startswith('showboard'):
         for i in range(19):
@@ -117,7 +117,7 @@ while True:
             colorChar = tokens[1]
             willPlayColor = colorCharToIndex[colorChar]
             interval =  int(tokens[2])
-            start_analysis(go,interval)
+            start_analysis(go,interval,policy_dir,value_dir)
 
             # print(f"info move D4 visits 100 winrate 55.0 prior 0.05")
             # print(f"info move Q16 visits 80 winrate 52.5 prior 0.04")
