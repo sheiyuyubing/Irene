@@ -8,6 +8,7 @@ from net import PolicyNetwork, ValueNetwork
 from genMove import getPolicyNetResult, toPosition
 from features import getAllFeatures
 from sgfmill import sgf
+import matplotlib.pyplot as plt
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -82,7 +83,7 @@ def train_policy_gradient(policy_model, value_model, data, old_policy_model=None
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
     optimizer = torch.optim.Adam(policy_model.parameters(), lr=lr)
-
+    loss_history = []
     for epoch in range(epochs):
         total_loss = 0.0
         for i in range(0, len(states), 64):
@@ -120,17 +121,17 @@ def train_policy_gradient(policy_model, value_model, data, old_policy_model=None
 
         avg_loss = total_loss / (len(states) // 64 + 1)
         print(f"[PolicyNet] Epoch {epoch+1}, Loss: {avg_loss:.4f}")
+    return loss_history
 
 
-
-def train_value_network(model, data, epochs=5, lr=5e-4):
+def train_value_network(model, data, epochs=5, lr=1e-4):
     model.train()
     states, rewards = zip(*data)
     states = torch.stack([torch.tensor(s, dtype=torch.float32) for s in states]).to(device)
     rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
+    loss_history = []
     for epoch in range(epochs):
         for i in range(0, len(states), 64):
             batch_states = states[i:i+64]
@@ -144,7 +145,7 @@ def train_value_network(model, data, epochs=5, lr=5e-4):
             optimizer.step()
 
         print(f"[ValueNet] Epoch {epoch+1}, Loss: {loss.item():.4f}")
-
+    return loss_history
 
 def evaluate_win_rate(model_a, model_b, n_games=10):
     wins = 0
@@ -156,6 +157,20 @@ def evaluate_win_rate(model_a, model_b, n_games=10):
     return wins / n_games
 
 
+
+def plot_training_losses(policy_losses, value_losses):
+    plt.figure(figsize=(10, 5))
+    plt.plot(policy_losses, label='Policy Network Loss', color='blue')
+    plt.plot(value_losses, label='Value Network Loss', color='green')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('training_losses.png')
+    plt.show()
+
 def selfplay_train_pipeline(best_model_path, model_pool_dir, sgf_dir, total_cycles=10, games_per_cycle=10, train_epochs=5):
     os.makedirs(model_pool_dir, exist_ok=True)
     os.makedirs(sgf_dir, exist_ok=True)
@@ -163,6 +178,8 @@ def selfplay_train_pipeline(best_model_path, model_pool_dir, sgf_dir, total_cycl
     best_model = load_model(best_model_path, PolicyNetwork)
     value_model = ValueNetwork().to(device)
 
+    policy_loss_all = []
+    value_loss_all = []
     for cycle in range(total_cycles):
         print(f"\n=== Cycle {cycle + 1} ===")
         records_all = []
@@ -182,9 +199,11 @@ def selfplay_train_pipeline(best_model_path, model_pool_dir, sgf_dir, total_cycl
                 records_all.extend([(s, a, reward) for s, a in records[color]])
 
         # Train networks
-        train_value_network(value_model, [(s, r) for s, a, r in records_all], epochs=train_epochs)
-        train_policy_gradient(best_model, value_model, records_all, epochs=train_epochs)
+        value_losses=train_value_network(value_model, [(s, r) for s, a, r in records_all], epochs=train_epochs)
+        policy_losses=train_policy_gradient(best_model, value_model, records_all, epochs=train_epochs)
 
+        value_loss_all.extend(value_losses)
+        policy_loss_all.extend(policy_losses)
         # Save candidate model
         candidate_path = os.path.join(model_pool_dir, f"candidate_cycle_{cycle:03d}.pt")
         torch.save(best_model.state_dict(), candidate_path)
@@ -201,7 +220,7 @@ def selfplay_train_pipeline(best_model_path, model_pool_dir, sgf_dir, total_cycl
             best_model.load_state_dict(torch.load(best_model_path, map_location=device))
             print("[回退] 当前模型未达标，保持原模型 ")
 
-
+        plot_training_losses(policy_loss_all, value_loss_all)
 
 def selfplay_train_pipeline_v2(
     best_model_path,
@@ -210,8 +229,8 @@ def selfplay_train_pipeline_v2(
     total_cycles=20,
     games_per_cycle=10,
     train_epochs=10,
-    policy_lr=1e-3,
-    value_lr=1e-3,
+    policy_lr=1e-5,
+    value_lr=1e-5,
     update_threshold=0.52,
     eval_games=20
 ):
@@ -220,7 +239,8 @@ def selfplay_train_pipeline_v2(
 
     best_model = load_model(best_model_path, PolicyNetwork)
     value_model = ValueNetwork().to(device)
-
+    policy_loss_all = []
+    value_loss_all = []
     for cycle in range(total_cycles):
         print(f"\n=== Cycle {cycle + 1}/{total_cycles} ===")
         records_all = []
@@ -243,18 +263,20 @@ def selfplay_train_pipeline_v2(
         print(f"[训练数据] 总样本数: {len(records_all)}")
 
         # 训练 Value Network
-        train_value_network(value_model,
+        value_losses =train_value_network(value_model,
                             [(s, r) for s, a, r in records_all],
                             epochs=train_epochs,
                             lr=value_lr)
 
         # 训练 Policy Network（策略梯度）
-        train_policy_gradient(best_model,
+        policy_losses = train_policy_gradient(best_model,
                               value_model,
                               records_all,
                               epochs=train_epochs,
                               lr=policy_lr)
 
+        value_loss_all.extend(value_losses)
+        policy_loss_all.extend(policy_losses)
         # 保存候选模型
         candidate_path = os.path.join(model_pool_dir, f"candidate_cycle_{cycle:03d}.pt")
         torch.save(best_model.state_dict(), candidate_path)
@@ -271,6 +293,8 @@ def selfplay_train_pipeline_v2(
             best_model.load_state_dict(torch.load(best_model_path, map_location=device))
             print(f"[回退]  胜率未达 {update_threshold*100:.1f}%，保留原模型")
 
+        plot_training_losses(policy_loss_all, value_loss_all)
+        
 if __name__ == '__main__':
     # selfplay_train_pipeline(
     #     best_model_path='checkpoints/best_model.pt',
