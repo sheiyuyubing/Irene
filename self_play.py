@@ -58,8 +58,10 @@ def train_policy_gradient(model, data, epochs=5, lr=1e-3):
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     model.train()
+    
     states, actions, rewards = zip(*data)
-    states = torch.stack(states).to(device)
+    states = torch.stack([torch.tensor(s, dtype=torch.float32) for s in states]).to(device)
+
     actions = torch.tensor(actions).to(device)
     rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
 
