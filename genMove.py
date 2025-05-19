@@ -67,6 +67,8 @@ def getValueNetResult(go,at):
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
     valueNet.load_state_dict(torch.load(at, map_location=device))
     valueNet.to(device)
+    valueNet.eval()  # 加上eval模式，防止训练时的dropout/bn影响
+
     inputData = inputData.to(device)  # <== 加这一行！
     value = valueNet(inputData)[0].item()
     return value
