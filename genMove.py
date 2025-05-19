@@ -3,6 +3,7 @@ from go import *
 import sys
 import os
 from features import getAllFeatures
+import torch
 
 # set random seed
 torch.manual_seed(0)
@@ -43,26 +44,28 @@ def toStrPosition(x, y):
     return f'{y}{x}'
 
 
-def getPolicyNetResult(go,at):
+def getPolicyNetResult(go, model):
+    model.eval()
     inputData = getAllFeatures(go)
-    inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
-    policyNet.load_state_dict(torch.load(at, map_location=device))
-    policyNet.to(device)
-    inputData = inputData.to(device)  # <== 加这一行！
-    predict = policyNet(inputData)[0]
+    inputData = torch.tensor(inputData, dtype=torch.float32).reshape(1, -1, 19, 19).to(device)
+    with torch.no_grad():
+        predict = model(inputData)[0]
     return predict
 
 
-def getPlayoutNetResult(go,at):
+
+def getValueNetResult(go, model):
+    model.eval()
     inputData = getAllFeatures(go)
-    inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
-    playoutNet.load_state_dict(torch.load(at, map_location=device))
-    playoutNet.to(device)
-    predict = playoutNet(inputData)[0]
-    return predict
+    inputData = torch.tensor(inputData, dtype=torch.float32).reshape(1, -1, 19, 19).to(device)
+    with torch.no_grad():
+        value = model(inputData)[0].item()
+    return value
 
 
-def getValueNetResult(go,at):
+
+
+def getValueNetResult(go,model):
     inputData = getAllFeatures(go)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
     valueNet.load_state_dict(torch.load(at, map_location=device))
