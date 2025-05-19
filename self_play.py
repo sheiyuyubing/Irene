@@ -7,6 +7,7 @@ from net import PolicyNetwork,ValueNetwork
 from genMove import getPolicyNetResult, toPosition
 from sgfmill import sgf
 from features import  *
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -52,7 +53,6 @@ def train_policy_gradient(model, data, epochs=5, lr=1e-3):
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     model.train()
-
     states, actions, rewards = zip(*data)
     states = torch.stack(states).to(device)
     actions = torch.tensor(actions).to(device)
@@ -135,8 +135,8 @@ def selfplay_train_pipeline(
 
 if __name__ == '__main__':
     selfplay_train_pipeline(
-        best_model_path='checkpoints/best_model.pt',
-        model_pool_dir='checkpoints',
+        best_model_path='checkpoints/checkpoints/best_model.pt',
+        model_pool_dir='checkpoints/checkpoints',
         sgf_dir='games/sgf_selfplay',
         selfplay_games=100,
         train_epochs=5
