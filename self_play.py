@@ -3,7 +3,7 @@ import os
 import random
 import torch
 from go import Go
-from net import PolicyNetwork
+from net import PolicyNetwork,ValueNetwork
 from genMove import getPolicyNetResult, toPosition
 from sgfmill import sgf
 from features import  *
