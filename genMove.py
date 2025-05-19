@@ -76,7 +76,6 @@ def getValueResult(go):
     # predict = playoutNet(inputData)[0, 361]
     # return 1 - predict.item()
     willPlayColor = go.current_color
-
     countThisColor = np.sum(go.board == willPlayColor)
     countAnotherColor = np.sum(go.board == -willPlayColor)
     return countThisColor - countAnotherColor
