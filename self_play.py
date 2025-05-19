@@ -27,14 +27,17 @@ def self_play_game(black_model_path, white_model_path, sgf_path=None):
 
         for index in sorted_indices:
             x, y = toPosition(index)
-            if (x, y) == (None, None):
+
+            if (x, y) == (None, None):  # 表示“pass”
                 board.passcount += 1
-                main_sequence[-1].set_move('b' if color == 1 else 'w', None)
+                node = main_sequence.extend_main_sequence()
+                node.set_move('b' if color == 1 else 'w', None)
                 records[color].append((getAllFeatures(board), index.item()))
                 break
+
             if board.move(x, y):
-                main_sequence.append(sgf_game.new_node())
-                main_sequence[-1].set_move('b' if color == 1 else 'w', (x, y))
+                node = main_sequence.extend_main_sequence()
+                node.set_move('b' if color == 1 else 'w', (x, y))
                 records[color].append((getAllFeatures(board), index.item()))
                 break
 
