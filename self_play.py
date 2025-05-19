@@ -19,12 +19,12 @@ def load_model(path, model_class):
     return model
 
 
-def self_play_game(black_model, white_model, sgf_path=None):
+def self_play_game(black_model_dir, white_model_dir, sgf_path=None):
     board = Go()
     sgf_game = sgf.Sgf_game(size=19)
     node = sgf_game.get_root()
 
-    models = {1: black_model, -1: white_model}
+    models = {1: black_model_dir, -1: white_model_dir}
     records = {1: [], -1: []}
 
     while not board.game_over():
@@ -38,6 +38,7 @@ def self_play_game(black_model, white_model, sgf_path=None):
             x, y = toPosition(idx.item())
 
             if (x, y) == (None, None):
+                board.move(x,y)
                 board.passcount += 1
                 node = node.new_child()
                 node.set_move('b' if color == 1 else 'w', None)
