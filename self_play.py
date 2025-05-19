@@ -12,6 +12,17 @@ import torch.nn.functional as F
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+
+def load_compatible_model(path, model_class):
+    try:
+        model = model_class()
+        state_dict = torch.load(path, map_location=device)
+        model.load_state_dict(state_dict)
+        return model
+    except Exception as e:
+        print(f"[跳过] 无法加载模型 {path}：{e}")
+        return None
+
 def self_play_game(black_model_path, white_model_path, sgf_path=None):
     board = Go()
     sgf_game = sgf.Sgf_game(size=19)
@@ -127,25 +138,34 @@ def selfplay_train_pipeline(
     best_model = PolicyNetwork()
     best_model.load_state_dict(torch.load(best_model_path, map_location=device))
 
-    value_model = ValueNetwork()
     for cycle in range(selfplay_games // 2):
         print(f"\n=== 自对弈 第 {cycle + 1} 轮 ===")
         game_data_black, game_data_white = [], []
 
         for game_idx in range(2):
-            opponent_model = PolicyNetwork()
-            opponent_path = random.choice([
+            # 随机选择可加载的对手模型
+            candidates = [
                 os.path.join(model_pool_dir, f)
                 for f in os.listdir(model_pool_dir)
                 if f.endswith('.pt')
-            ])
-            opponent_model.load_state_dict(torch.load(opponent_path, map_location=device))
+            ]
+
+            opponent_model = None
+            for path in random.sample(candidates, len(candidates)):
+                opponent_model = load_compatible_model(path, PolicyNetwork)
+                if opponent_model is not None:
+                    break
+
+            if opponent_model is None:
+                print("[警告] 没有可用的历史模型，跳过当前轮次")
+                continue
+
+            opponent_path = path
             black_path, white_path = (best_model_path, opponent_path) if game_idx % 2 == 0 else (best_model_path, best_model_path)
 
             sgf_path = os.path.join(sgf_dir, f"game_{cycle:03d}_{game_idx}.sgf")
             records, winner = self_play_game(black_path, white_path, sgf_path)
 
-            # 奖励分配：胜者 +1，负者 -1
             for color in [1, -1]:
                 reward = 1.0 if color == winner else -1.0
                 data = [(s, a, reward) for s, a in records[color]]
@@ -156,25 +176,24 @@ def selfplay_train_pipeline(
 
         value_data = [(s, r) for (s, a, r) in game_data_black + game_data_white]
 
-        # 训练两个模型
+        # 训练策略网络
         print("[训练] Black 模型")
         train_policy_gradient(best_model, game_data_black, epochs=train_epochs)
         print("[训练] White 模型")
         train_policy_gradient(best_model, game_data_white, epochs=train_epochs)
 
-        #训练Value网络
+        # 训练价值网络
         train_value_network(value_model, value_data, epochs=train_epochs)
 
-        # 保存新的最优模型副本
+        # 保存模型
         new_model_path = os.path.join(model_pool_dir, f"model_cycle_{cycle:03d}.pt")
         torch.save(best_model.state_dict(), new_model_path)
 
-        # 保存 Value 网络模型
         value_model_path = os.path.join(model_pool_dir, f"value_model_cycle_{cycle:03d}.pt")
         torch.save(value_model.state_dict(), value_model_path)
-        # 更新当前最优
-        update_best_model(best_model, best_model_path)
 
+        # 更新当前最优模型
+        update_best_model(best_model, best_model_path)
 
 if __name__ == '__main__':
     selfplay_train_pipeline(
