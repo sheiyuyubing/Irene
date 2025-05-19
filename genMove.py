@@ -52,7 +52,11 @@ def getPolicyNetResult(go, model):
         predict = model(inputData)[0]
     return predict
 
-
+def getPlayoutNetResult(go, model):
+    inputData = getAllFeatures(go)
+    inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
+    predict = model (inputData)[0]
+    return predict
 
 def getValueNetResult(go, model):
     model.eval()
@@ -68,9 +72,7 @@ def getValueNetResult(go, model):
 def getValueNetResult(go,model):
     inputData = getAllFeatures(go)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
-    valueNet.load_state_dict(torch.load(at, map_location=device))
-    valueNet.to(device)
-    valueNet.eval()  # 加上eval模式，防止训练时的dropout/bn影响
+    valueNet.load_state_dict(torch.load(model, map_location=device))
 
     inputData = inputData.to(device)  # <== 加这一行！
     value = valueNet(inputData)[0].item()
@@ -86,9 +88,9 @@ def getValueResult(go):
     return countThisColor - countAnotherColor
 
 
-def genMovePolicy(go,at):
+def genMovePolicy(go,model):
 
-    predict = getPolicyNetResult(go,at)
+    predict = getPolicyNetResult(go,model)
     predictReverseSortIndex = reversed(torch.argsort(predict))
     willPlayColor = go.current_color
     # sys err valueNet output
@@ -194,12 +196,14 @@ def getMostVisitedChild(node):
     return bestChild
 
 
-def defaultPolicy(expandNode, rootColor, at):
+
+
+def defaultPolicy(expandNode, rootColor, model):
     newGo = expandNode.go.clone()
     willPlayColor = expandNode.color
 
     for i in range(5):
-        predict = getPlayoutNetResult(newGo, at)
+        predict = getPlayoutNetResult(newGo, model)
 
         while True:
             selectedIndex = np.random.choice(len(predict), p=predict.exp().detach().numpy())
@@ -211,7 +215,7 @@ def defaultPolicy(expandNode, rootColor, at):
 
         willPlayColor = -willPlayColor
 
-    value = getValueNetResult(newGo, at)
+    value = getValueNetResult(newGo, model)
 
     if debug:
         print(f'expandNode: {expandNode} value: {value}')
@@ -219,11 +223,11 @@ def defaultPolicy(expandNode, rootColor, at):
     return value
 
 
-def searchChildren(node, at):
+def searchChildren(node, model):
     go = node.go
     nodeWillPlayColor = node.color
 
-    predict = getPolicyNetResult(go, at)
+    predict = getPolicyNetResult(go, model)
     predictReverseSortIndex = reversed(torch.argsort(predict))
 
     count = 0
@@ -246,25 +250,25 @@ def searchChildren(node, at):
                 break
 
 
-def MCTS(root, at):
+def MCTS(root, model):
     rootColor = root.color
     for i in range(200):
         expandNode = treePolicy(root)
         assert expandNode is not None
-        searchChildren(expandNode, at)
-        value = defaultPolicy(expandNode, rootColor, at)
+        searchChildren(expandNode, model)
+        value = defaultPolicy(expandNode, rootColor, model)
         backward(expandNode, value)
     bestNextNode = getBestChild(root)
     return bestNextNode
 
 
-def genMoveMCTS(go, at):
+def genMoveMCTS(go, model):
     root = MCTSNode(go, None)
-    bestNextNode = MCTS(root, at)
+    bestNextNode = MCTS(root, model)
     bestMove = bestNextNode.go.history[-1]
 
     if debug:
-        playoutResult = getPlayoutNetResult(go, at)
+        playoutResult = getPlayoutNetResult(go, model)
         playoutMove = toPosition(torch.argmax(playoutResult))
         print(playoutMove, bestMove, playoutMove == bestMove)
         for child in root.children:
@@ -286,25 +290,25 @@ def genMoveMCTS(go, at):
 
 debug = False
 
-if __name__ == '__main__':
-    # 初始化棋盘
-    go = Go()
-
-    # willPlayColor = 1
-    # for i in range(8):
-    #     genMoveMCTS(go, willPlayColor)
-    #     willPlayColor = -willPlayColor
-    # debug = True
-    # genMoveMCTS(go, willPlayColor)
-
-    go.move(1, 3, 16)
-    go.move(-1, 3, 3)
-    go.move(1, 16, 16)
-    go.move(-1, 16, 3)
-    go.move(1, 2, 5)
-
-    debug = True
-    genMoveMCTS(go, -1)
-
-    for item in go.history:
-        print(toStrPosition(item[0], item[1]))
+# if __name__ == '__main__':
+#     # 初始化棋盘
+#     go = Go()
+#
+#     # willPlayColor = 1
+#     # for i in range(8):
+#     #     genMoveMCTS(go, willPlayColor)
+#     #     willPlayColor = -willPlayColor
+#     # debug = True
+#     # genMoveMCTS(go, willPlayColor)
+#
+#     go.move(1, 3, 16)
+#     go.move(-1, 3, 3)
+#     go.move(1, 16, 16)
+#     go.move(-1, 16, 3)
+#     go.move(1, 2, 5)
+#
+#     debug = True
+#     genMoveMCTS(go, -1)
+#
+#     for item in go.history:
+#         print(toStrPosition(item[0], item[1]))
