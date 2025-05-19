@@ -4,6 +4,23 @@ import sys
 import  os
 from genMove import *
 from analysis import  start_analysis, stop_analysis
+import torch
+from net import PolicyNetwork, ValueNetwork
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+import torch
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+def load_model(model_path, model_class):
+    model = model_class().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()  # 推理模式，关闭 Dropout 和 BatchNorm 的训练行为
+    return model
+
 
 def get_path(relative_path):
     try:
@@ -18,6 +35,11 @@ go = Go()
 
 policy_dir  = get_path("checkpoints/best_model.pt")
 value_dir = get_path("checkpoints/value_model_cycle_048.pt")
+
+
+policy_model = load_model(policy_dir, PolicyNetwork)
+value_model = load_model(value_dir, ValueNetwork)
+
 
 # stderr output 'GTP ready'
 sys.stderr.write('GTP ready\n')
@@ -72,9 +94,9 @@ while True:
         go.current_color = colorCharToIndex[colorChar]
 
         if len(sys.argv) > 1 and sys.argv[1] == 'MCTS':
-            genMoveMCTS(go,policy_dir)
+            genMoveMCTS(go,policy_model)
         else:
-            genMovePolicy(go,policy_dir)
+            genMovePolicy(go,policy_model )
 
     elif line.startswith('showboard'):
         for i in range(19):
@@ -117,7 +139,7 @@ while True:
             colorChar = tokens[1]
             willPlayColor = colorCharToIndex[colorChar]
             interval =  int(tokens[2])
-            start_analysis(go,interval,policy_dir,value_dir)
+            start_analysis(go,interval,policy_model,value_model)
 
             # print(f"info move D4 visits 100 winrate 55.0 prior 0.05")
             # print(f"info move Q16 visits 80 winrate 52.5 prior 0.04")
