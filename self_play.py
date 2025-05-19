@@ -38,7 +38,7 @@ def self_play_game(black_model_dir, white_model_dir, sgf_path=None):
             x, y = toPosition(idx.item())
 
             if (x, y) == (None, None):
-                board.move(x,y)
+                # board.move(x,y)
                 board.passcount += 1
                 node = node.new_child()
                 node.set_move('b' if color == 1 else 'w', None)
