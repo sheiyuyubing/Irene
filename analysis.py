@@ -1,3 +1,4 @@
+#encoding=utf-8
 import threading
 import time
 from genMove import *
@@ -7,15 +8,15 @@ analyze_thread = None
 
 import torch
 
-def get_top_moves(go, topk=5,policy_dir,value_dir):
+def get_top_moves(go,policy_dir,value_dir, topk=5):
     policy = getPolicyNetResult(go,policy_dir)  # shape: (361,)
     value = getValueNetResult(go,value_dir)    # float 0.0~1.0
-    winrate = int(value * 100)  # ×ª»»Îª GTP ĞèÒªµÄÕûÊı¸ñÊ½
+    winrate = int(value * 100)  # è½¬æ¢ä¸º GTP éœ€è¦çš„æ•´æ•°æ ¼å¼
 
-    # »ñÈ¡Ô¤²âÖĞÇ° topk ¸ö¶¯×÷µÄÎ»ÖÃË÷Òı£¨½µĞò£©
+    # è·å–é¢„æµ‹ä¸­å‰ topk ä¸ªåŠ¨ä½œçš„ä½ç½®ç´¢å¼•ï¼ˆé™åºï¼‰
     topk_indices = torch.topk(policy, topk).indices.tolist()
 
-    # Ä£Äâ visits£¨¿É×Ô¶¨Òå²ßÂÔ£©
+    # æ¨¡æ‹Ÿ visitsï¼ˆå¯è‡ªå®šä¹‰ç­–ç•¥ï¼‰
     max_visits = 1000
     decay = 100
 
@@ -25,7 +26,7 @@ def get_top_moves(go, topk=5,policy_dir,value_dir):
         if (x, y) == (None, None):
             print('pass')
             return
-        moveResult = toStrPosition(x, y)  # ×Ô¶¨Òåº¯Êı£¬½«×ø±ê×ª GTP ×Ö·û´®
+        moveResult = toStrPosition(x, y)  # è‡ªå®šä¹‰å‡½æ•°ï¼Œå°†åæ ‡è½¬ GTP å­—ç¬¦ä¸²
         visits = max_visits - i * decay
 
         move_infos.append({
@@ -46,14 +47,14 @@ def start_analysis(go, interval,policy_dir,value_dir):
     def analyze_loop():
 
         while not stop_event.is_set():
-            # ÕâÀïÄ£ÄâÊä³ö info move
-            move_stats = get_top_moves(go,policy_dir,value_dir)  # ·µ»Ø¶à¸ö move µÄ dict
+            # è¿™é‡Œæ¨¡æ‹Ÿè¾“å‡º info move
+            move_stats = get_top_moves(go,policy_dir,value_dir,topk = 5)  # è¿”å›å¤šä¸ª move çš„ dict
             for stat in move_stats:
                 print("info", end=' ')
                 for key, value in stat.items():
                     print(f"{key} {value}", end=' ')
                 print()
-            time.sleep(interval)  # ¿ØÖÆ·ÖÎöÊä³öµÄÆµÂÊ
+            time.sleep(interval)  # æ§åˆ¶åˆ†æè¾“å‡ºçš„é¢‘ç‡
 
     analyze_thread = threading.Thread(target=analyze_loop)
     analyze_thread.start()
