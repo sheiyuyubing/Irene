@@ -42,7 +42,8 @@ def self_play_game(black_model_path, white_model_path, sgf_path=None):
                 break
 
     winner = board.get_winner()
-    sgf_game.set_result("B+" if winner == 1 else "W+")
+    sgf_game.get_root().set("RE", "B+" if winner == 1 else "W+")
+
 
     if sgf_path:
         os.makedirs(os.path.dirname(sgf_path), exist_ok=True)
