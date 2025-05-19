@@ -72,6 +72,7 @@ class PlayoutNetwork(nn.Module):
 
 
 # 价值网络，输入棋盘 features，输出胜率
+
 class ValueNetwork(nn.Module):
     def __init__(self):
         super(ValueNetwork, self).__init__()
@@ -83,14 +84,14 @@ class ValueNetwork(nn.Module):
         self.linear = nn.Linear(2 * 19 * 19, 1)
 
     def forward(self, x):
-        x = x.float()
+        x = x.float()  # [B, 15, 19, 19]
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))  # 是否需要 relu？
-        x = self.conv5(x)
-        x = x.view(-1, 2 * 19 * 19)
-        x = self.linear(x)
-        x = x.view(-1)
-        x = torch.sigmoid(x)
+        x = F.relu(self.conv4(x))
+        x = self.conv5(x)  # [B, 2, 19, 19]
+        x = x.view(x.size(0), -1)  # Flatten: [B, 2*19*19]
+        x = self.linear(x)         # [B, 1]
+        x = x.view(-1)             # [B]
+        x = torch.tanh(x)          # 输出范围 [-1, 1]
         return x
