@@ -173,12 +173,94 @@ def selfplay_train_pipeline(best_model_path, model_pool_dir, sgf_dir, total_cycl
             print("[回退] 当前模型未达标，保持原模型 ")
 
 
+
+def selfplay_train_pipeline_v2(
+    best_model_path,
+    model_pool_dir,
+    sgf_dir,
+    total_cycles=20,
+    games_per_cycle=10,
+    train_epochs=10,
+    policy_lr=1e-3,
+    value_lr=1e-3,
+    update_threshold=0.52,
+    eval_games=20
+):
+    os.makedirs(model_pool_dir, exist_ok=True)
+    os.makedirs(sgf_dir, exist_ok=True)
+
+    best_model = load_model(best_model_path, PolicyNetwork)
+    value_model = ValueNetwork().to(device)
+
+    for cycle in range(total_cycles):
+        print(f"\n=== Cycle {cycle + 1}/{total_cycles} ===")
+        records_all = []
+
+        for game_idx in range(games_per_cycle):
+            opponent_path = random.choice([
+                os.path.join(model_pool_dir, f)
+                for f in os.listdir(model_pool_dir) if f.endswith(".pt")
+            ]) if cycle > 0 else best_model_path
+            opponent = load_model(opponent_path, PolicyNetwork)
+
+            black, white = (best_model, opponent) if game_idx % 2 == 0 else (opponent, best_model)
+            sgf_path = os.path.join(sgf_dir, f"game_{cycle:03d}_{game_idx}.sgf")
+            records, winner = self_play_game(black, white, sgf_path)
+
+            for color in [1, -1]:
+                reward = 1.0 if color == winner else -1.0
+                records_all.extend([(s, a, reward) for s, a in records[color]])
+
+        print(f"[训练数据] 总样本数: {len(records_all)}")
+
+        # 训练 Value Network
+        train_value_network(value_model,
+                            [(s, r) for s, a, r in records_all],
+                            epochs=train_epochs,
+                            lr=value_lr)
+
+        # 训练 Policy Network（策略梯度）
+        train_policy_gradient(best_model,
+                              value_model,
+                              records_all,
+                              epochs=train_epochs,
+                              lr=policy_lr)
+
+        # 保存候选模型
+        candidate_path = os.path.join(model_pool_dir, f"candidate_cycle_{cycle:03d}.pt")
+        torch.save(best_model.state_dict(), candidate_path)
+
+        # 评估当前模型相较最优模型的胜率
+        old_model = load_model(best_model_path, PolicyNetwork)
+        win_rate = evaluate_win_rate(best_model, old_model, n_games=eval_games)
+        print(f"[评估] 当前模型 VS 最优模型胜率：{win_rate*100:.2f}%")
+
+        if win_rate > update_threshold:
+            torch.save(best_model.state_dict(), best_model_path)
+            print(f"[更新]  胜率高于 {update_threshold*100:.1f}%，替换最优模型")
+        else:
+            best_model.load_state_dict(torch.load(best_model_path, map_location=device))
+            print(f"[回退]  胜率未达 {update_threshold*100:.1f}%，保留原模型")
+
 if __name__ == '__main__':
-    selfplay_train_pipeline(
+    # selfplay_train_pipeline(
+    #     best_model_path='checkpoints/best_model.pt',
+    #     model_pool_dir='checkpoints',
+    #     sgf_dir='games/sgf_selfplay',
+    #     total_cycles=20,
+    #     games_per_cycle=10,
+    #     train_epochs=5
+    # )
+
+    selfplay_train_pipeline_v2(
         best_model_path='checkpoints/best_model.pt',
         model_pool_dir='checkpoints',
         sgf_dir='games/sgf_selfplay',
         total_cycles=20,
         games_per_cycle=10,
-        train_epochs=5
+        train_epochs=10,
+        policy_lr=1e-3,
+        value_lr=1e-3,
+        update_threshold=0.52,
+        eval_games=20
     )
