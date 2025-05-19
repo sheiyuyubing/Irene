@@ -45,10 +45,10 @@ def toStrPosition(x, y):
 
 def getPolicyNetResult(go,at):
     inputData = getAllFeatures(go)
-    # inputData = inputData.to(device)
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
     policyNet.load_state_dict(torch.load(at, map_location=device))
     policyNet.to(device)
+    inputData = inputData.to(device)  # <== 加这一行！
     predict = policyNet(inputData)[0]
     return predict
 
@@ -67,6 +67,7 @@ def getValueNetResult(go,at):
     inputData = torch.tensor(inputData).bool().reshape(1, -1, 19, 19)
     valueNet.load_state_dict(torch.load(at, map_location=device))
     valueNet.to(device)
+    inputData = inputData.to(device)  # <== 加这一行！
     value = valueNet(inputData)[0].item()
     return value
 
