@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def self_play_game(black_model_path, white_model_path, sgf_path=None):
     board = Go()
     sgf_game = sgf.Sgf_game(size=19)
-    main_sequence = sgf_game.get_main_sequence()
+    node = sgf_game.get_root()  # 初始是根节点
 
     models = {1: black_model_path, -1: white_model_path}
     records = {1: [], -1: []}
@@ -28,15 +28,15 @@ def self_play_game(black_model_path, white_model_path, sgf_path=None):
         for index in sorted_indices:
             x, y = toPosition(index)
 
-            if (x, y) == (None, None):  # 表示“pass”
+            if (x, y) == (None, None):  # pass
                 board.passcount += 1
-                node = main_sequence.extend_main_sequence()
+                node = node.new_child()
                 node.set_move('b' if color == 1 else 'w', None)
                 records[color].append((getAllFeatures(board), index.item()))
                 break
 
             if board.move(x, y):
-                node = main_sequence.extend_main_sequence()
+                node = node.new_child()
                 node.set_move('b' if color == 1 else 'w', (x, y))
                 records[color].append((getAllFeatures(board), index.item()))
                 break
@@ -50,6 +50,7 @@ def self_play_game(black_model_path, white_model_path, sgf_path=None):
             f.write(sgf_game.serialise())
 
     return records, winner
+
 
 
 def train_policy_gradient(model, data, epochs=5, lr=1e-3):
